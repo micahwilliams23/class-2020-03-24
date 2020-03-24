@@ -9,33 +9,98 @@ library(infer)
 library(gov.1005.data)
 library(broom)
 library(tidyverse)
+data(train)
 ```
 
 # Scene 1
 
 **Prompt:** Explore train data from the **gov.1005.data** with your partner and try to figure out what it means. Recall the syllabus assignment: "Causal effect of intergroup contact on exclusionary attitudes" by Ryan Enos. PNAS March 11, 2014 111 (10) 3699-3704. [link](https://www.pnas.org/content/pnas/111/10/3699.full.pdf%20). You read it, right? Read the abstract at least! Can you find any "interesting" observations? Make a plot! Which variables are worth looking at? It may be necessary to help students with the key variables. `treatment` has two levels, `Treated` and `Control`. The Treated have two Spanish-speakers have a conversation on their commuter train platform. The Control do not. Both before and after the treatment, everyone answers three questions about immigration. The answer for each question is codes from 1 (strongly disagree) through 5 (strongly agree). So, the most "conservative" starting attitude (`att_start`) before the treatment would be 15.
 
+```{r}
+ggplot(train, aes(att_start, att_end)) +
+  geom_point(aes(color = case_when(att_end > att_start ~ 'Less Conservative',
+                               att_end < att_start ~ 'More conservative',
+                               TRUE ~'No change'))) +
+  geom_abline(slope = 1, lty = 2, alpha = 0.5) +
+  scale_color_discrete(name = 'Change in Attitude') +
+  labs(title = 'Change in attitude',
+       x = 'Attitude at start',
+       y = 'Attitude at end')
+
+```
+
+
 # Scene 2
 
 **Prompt:** What is the average income of the commuters? How sure can we be of that number? If we were to survey another 115 commuters, what would their average income be? How does this connect to the difference between the harpoon and the net in the book? Don't know? Look it up!
+
+```{r}
+train %>% pull(income) %>% mean()
+```
+
 
 # Scene 3
 
 **Prompt:** Create a bootstrap sample of a 1,000 replications of the mean income of the commuters, where each replication draws the appropriate number, with replacement, from the original data.
 
+```{r}
+bootstrap_income <- tibble(avg_inc = map_dbl(1:1000, 
+                                             ~sample_n(train, size = 50, replace = T) %>%
+                                               pull(income) %>% 
+                                               mean()))
+
+ggplot(bootstrap_income, aes(avg_inc)) + geom_histogram()
+```
+
+
+
 # Scene 4
 
 **Prompt:** Using the bootstrap sample you create, calculate the 50% confidence interval (using the percentile method) of the true mean income of commuters. What is the meaning of this interval? What does it tell us about the world that we did not know before? Is that the same thing as thinking that there is a 50% chance that, if we were to draw a new commuter at random, that her income would fall within that range? Why or why not? What if, instead of looking at all commuters in the sample, we just looked at the Treated. That is easy to do with a single `filter()`. But would the interpretation of the confidence interval be the same or different?
+
+```{r}
+quantile(bootstrap_income$avg_inc, probs = c(0.25, 0.75))
+```
 
 
 # Scene 5
 
 **Prompt:**  Calculate  the difference between the income of treated and control commuters in our sample. We need to subtract the Control average from the Treated average. To do that, having them on the same row is convenient. Recall the `pivot_*` functions. `everything()` is also a cool trick for organizing the order of the variables in a tibble. I like to put the key variable, which would be the income difference in this case, first.
 
+```{r}
+train %>%
+  group_by(treatment) %>%
+  summarize(avg_inc = mean(income)) %>%
+  pivot_wider(names_from = treatment, values_from = avg_inc) %>%
+  mutate(Difference = Control - Treated) %>% 
+  select(Difference, everything())
+```
+
+
 # Scene 7
 
 **Prompt:**  Calculate a 95% confidence interval for the difference between the mean income of treated and control commuters in our sample. Provide a Bayesian and Frequentist interpretation of this interval.
 
+```{r}
+treated <- train[train$treatment == 'Treated',]
+control <- train[train$treatment == 'Control',]
+
+get_inc_diff <- function(size = 40){
+  avg_treated <- sample_n(treated, size = size, replace = T) %>% pull(income) %>% mean()
+  avg_control <- sample_n(control, size = size, replace = T) %>% pull(income) %>% mean()
+  avg_treated - avg_control
+}
+
+bootstrap_difference <- tibble(inc_diff = map_dbl(1:1000, 
+                                             ~get_inc_diff(size = 40)))
+
+quantile(bootstrap_difference$inc_diff, probs = c(0.025, 0.975))
+```
+Bayesian: 
+There is a 0.95 probability that the true difference in mean income between the treatment and control groups is within the interval (-47324.69, 16766.25).
+
+Frequentist:
+If this calculation was performed a large number of times, the true difference in average income would be contained within the confidence interval in 95% of the trials.
 
 # Scene 8
 
