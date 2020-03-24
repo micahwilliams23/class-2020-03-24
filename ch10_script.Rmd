@@ -106,12 +106,25 @@ If this calculation was performed a large number of times, the true difference i
 
 **Prompt:**  What about the difference between att_chg of the treated and the controls? Calculate the mean difference, just as we did with income. Is this difference "large?" 
 
+```{r}
+att_chg <- train %>%
+  group_by(treatment) %>%
+  summarize(avg_att_chg = mean(att_chg)) %>%
+  pivot_wider(names_from = treatment, values_from = avg_att_chg) %>%
+  mutate(Difference = Control - Treated) %>% 
+  select(Difference, everything())
+att_chg
+```
 
 
 # Scene 9
 
 **Prompt:** What is the 99% confidence interval for that difference? 
 
+```{r}
+quantile(att_chg , probs = c(0.005, 0.995))
+
+```
 
 
 # Scene 10
